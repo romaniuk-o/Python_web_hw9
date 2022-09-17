@@ -4,8 +4,10 @@ from datetime import datetime
 from datetime import date
 from sqlalchemy import or_
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import joinedload
+
 from db import session
-from models import Contact
+from models import Contact, PhoneToContact
 
 
 class Field:
@@ -262,7 +264,7 @@ def greeting(*args):
 def add(*args):
     print(args)
     user_name = (args[0])
-    phone = str(Phone(args[1]))
+    phone_ = str(Phone(args[1]))
     try:
         birthday = str(Birthday(args[2]))
     except IndexError:
@@ -270,12 +272,17 @@ def add(*args):
     try:
         contact = Contact(
             user_name=user_name,
-            phone=phone,
             birthday=birthday
             )
         session.add(contact)
         session.commit()
-        return f'Add user {user_name}, phone {phone}, birthday {birthday}'
+        phone = PhoneToContact(
+            phone=phone_,
+            contact_id=contact.id
+            )
+        session.add(phone)
+        session.commit()
+        return f'Add user {user_name}, phone {phone_}, birthday {birthday}'
     except SQLAlchemyError as err:
         print(err)
 
@@ -316,11 +323,14 @@ def add_adress(*args):
 def change_phone(*args):
     _id, old_phone, new_phone = args[0], str(Phone(args[1])), str(Phone(args[2]))
     try:
-        _ = session.query(Contact).filter(Contact.id == _id).one()
-        if _.phone == old_phone:
-            _.phone = new_phone
-            session.commit()
-            return f'User with id {_id} phone {old_phone} changed to {new_phone}'
+        contacts_ = session.query(PhoneToContact).filter(PhoneToContact.contact_id == _id).all()
+        phone_list = [_.phone for _ in contacts_]
+        if old_phone in phone_list:
+            for c in contacts_:
+                if c.phone == old_phone:
+                    c.phone = new_phone
+                    session.commit()
+                    return f'User with id {_id} phone {old_phone} changed to {new_phone}'
         else:
             return f'Old phone is wrong'
     except SQLAlchemyError as err:
@@ -344,7 +354,7 @@ def change_email(*args):
 
 @InputError
 def change_adres(*args):
-    _id, address, new_address  = int(args[0]), str(Mail(args[1])), str(Mail(args[2]))
+    _id, address, new_address = int(args[0]), str(Mail(args[1])), str(Mail(args[2]))
     try:
         _ = session.query(Contact).filter(Contact.id == _id).one()
         if _.address == address:
@@ -367,12 +377,17 @@ def del_contact(*args):
 
 @InputError
 def show_all(*args):
-    print('|{:^3}|{:^25}|{:^15}|{:^25}|{:^25}|{:^25}|'.format('id', 'user_name', 'phone', 'birthday', 'email', 'address'))
-    for _ in session.query(Contact).all():
-        print('_' * 130)
-        print('|{:<3}|{:<25}|{:<15}|{:<25}|{:<25}|{:<25}|'.format(str(_.id), str(_.user_name), str(_.phone), str(_.birthday),
-                                                           str(_.email), str(_.address)))
-    print('-' * 130)
+    count = 1
+    for _ in session.query(Contact).options(joinedload('phones')).all():
+        print('_' * 25, f'Sequence number {count}','_' * 25)
+        print(f"user_id___: {str(_.id)},\n"
+              f"user_name_: {str(_.user_name)},\n"
+              f"birthday__: {str(_.birthday)},\n"
+              f"email_____: {str(_.email)},\n"
+              f"address___: {str(_.address)},\n"
+              f"phone(s)__: {[f'{t.phone}' for t in _.phones]}")
+        count += 1
+    print('-' * 67)
     return 'END'
 
 
