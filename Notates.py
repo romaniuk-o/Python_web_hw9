@@ -23,7 +23,9 @@ class InputError:
 
 @InputError
 def add(*args):
-    notate = str(args[0])
+    notate = ''
+    for _ in args:
+        notate += _
     try:
         notate = Notate(
             notate=notate
@@ -55,10 +57,12 @@ def del_tag(*args):
 @InputError
 def change_notate(*args):
     _id = args[0]
-    new_notate = str(args[1])
+    notate = ''
+    for i in range(1, (len(args))):
+        notate += args[i]
     try:
         _ = session.query(Notate).filter(Notate.id == _id).one()
-        _.notate = new_notate
+        _.notate = notate
         session.commit()
         return 'Notate changed successful'
     except SQLAlchemyError as err:
